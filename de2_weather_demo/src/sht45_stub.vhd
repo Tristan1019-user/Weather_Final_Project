@@ -8,6 +8,8 @@ entity sht45_stub is
         poll_tick   : in  std_logic;
         i2c_sda_in  : in  std_logic;
         i2c_scl_in  : in  std_logic;
+        i2c_sda_oen : out std_logic;
+        i2c_scl_oen : out std_logic;
         temp_x10    : out integer range 0 to 999;
         humid_x10   : out integer range 0 to 1000;
         valid       : out std_logic;
@@ -20,19 +22,18 @@ begin
     process (clk, reset_n)
     begin
         if reset_n = '0' then
-            temp_x10  <= 241;
-            humid_x10 <= 507;
-            valid     <= '0';
-            active    <= '0';
+            i2c_sda_oen <= '1';
+            i2c_scl_oen <= '1';
+            temp_x10    <= 241;
+            humid_x10   <= 507;
+            valid       <= '0';
+            active      <= '0';
         elsif rising_edge(clk) then
-            active <= '0';
+            i2c_sda_oen <= '1';
+            i2c_scl_oen <= '1';
+            active      <= '0';
             if poll_tick = '1' then
-                -- TODO: replace with a real SHT45 I2C transaction.
-                -- Suggested real flow:
-                -- 1) issue measure command 0xFD to address 0x44
-                -- 2) wait for conversion time
-                -- 3) read 6 bytes
-                -- 4) convert raw data to temp_x10 and humid_x10
+                -- TODO: replace with a real SHT45 I2C transaction on JP4 EX_IO[0:1].
                 temp_x10  <= 241;
                 humid_x10 <= 507;
                 valid     <= '1';

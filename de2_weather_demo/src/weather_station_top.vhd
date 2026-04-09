@@ -24,46 +24,53 @@ entity weather_station_top is
         VGA_CLK     : out std_logic;
         VGA_BLANK_N : out std_logic;
         VGA_SYNC_N  : out std_logic;
+        EX_IO       : inout std_logic_vector(6 downto 0);
         GPIO        : inout std_logic_vector(35 downto 0)
     );
 end entity;
 
 architecture rtl of weather_station_top is
-    signal reset_n       : std_logic;
-    signal clk25         : std_logic := '0';
-    signal sec_tick      : std_logic := '0';
-    signal div2          : std_logic := '0';
-    signal sec_count     : unsigned(25 downto 0) := (others => '0');
+    signal reset_n          : std_logic;
+    signal clk25            : std_logic := '0';
+    signal sec_tick         : std_logic := '0';
+    signal div2             : std_logic := '0';
+    signal sec_count        : unsigned(25 downto 0) := (others => '0');
 
-    signal temp_x10      : integer range 0 to 999 := 235;
-    signal humid_x10     : integer range 0 to 1000 := 520;
-    signal press_hpa     : integer range 300 to 1200 := 1013;
-    signal pm25_x10      : integer range 0 to 2000 := 85;
-    signal light_pct     : integer range 0 to 100 := 50;
-    signal sensor_valid  : std_logic := '0';
-    signal sensor_tick   : std_logic := '0';
-    signal bus_active    : std_logic := '0';
+    signal temp_x10         : integer range 0 to 999 := 235;
+    signal humid_x10        : integer range 0 to 1000 := 520;
+    signal press_hpa        : integer range 300 to 1200 := 1013;
+    signal pm25_x10         : integer range 0 to 2000 := 85;
+    signal light_pct        : integer range 0 to 100 := 50;
+    signal sensor_valid     : std_logic := '0';
+    signal sensor_tick      : std_logic := '0';
+    signal bus_active       : std_logic := '0';
 
-    signal i2c_sda_oen   : std_logic;
-    signal i2c_scl_oen   : std_logic;
-    signal i2c_sda_in    : std_logic;
-    signal i2c_scl_in    : std_logic;
-    signal uart_tx       : std_logic;
-    signal uart_rx       : std_logic;
+    signal sht_sda_oen      : std_logic;
+    signal sht_scl_oen      : std_logic;
+    signal sht_sda_in       : std_logic;
+    signal sht_scl_in       : std_logic;
 
-    signal temp_status   : std_logic_vector(1 downto 0);
-    signal humid_status  : std_logic_vector(1 downto 0);
-    signal press_status  : std_logic_vector(1 downto 0);
-    signal pm_status     : std_logic_vector(1 downto 0);
+    signal bmp_sda_oen      : std_logic;
+    signal bmp_scl_oen      : std_logic;
+    signal bmp_sda_in       : std_logic;
+    signal bmp_scl_in       : std_logic;
 
-    signal temp_tens     : integer range 0 to 9;
-    signal temp_ones     : integer range 0 to 9;
-    signal humid_tens    : integer range 0 to 9;
-    signal humid_ones    : integer range 0 to 9;
-    signal press_thou    : integer range 0 to 9;
-    signal press_hund    : integer range 0 to 9;
-    signal press_tens    : integer range 0 to 9;
-    signal press_ones    : integer range 0 to 9;
+    signal uart_tx          : std_logic;
+    signal uart_rx          : std_logic;
+
+    signal temp_status      : std_logic_vector(1 downto 0);
+    signal humid_status     : std_logic_vector(1 downto 0);
+    signal press_status     : std_logic_vector(1 downto 0);
+    signal pm_status        : std_logic_vector(1 downto 0);
+
+    signal temp_tens        : integer range 0 to 9;
+    signal temp_ones        : integer range 0 to 9;
+    signal humid_tens       : integer range 0 to 9;
+    signal humid_ones       : integer range 0 to 9;
+    signal press_thou       : integer range 0 to 9;
+    signal press_hund       : integer range 0 to 9;
+    signal press_tens       : integer range 0 to 9;
+    signal press_ones       : integer range 0 to 9;
 begin
     reset_n <= KEY(0);
 
@@ -88,34 +95,45 @@ begin
     clk25 <= div2;
     VGA_CLK <= clk25;
 
-    GPIO(0) <= '0' when i2c_sda_oen = '0' else 'Z';
-    GPIO(1) <= '0' when i2c_scl_oen = '0' else 'Z';
-    i2c_sda_in <= GPIO(0);
-    i2c_scl_in <= GPIO(1);
+    -- JP4 14-pin header: dedicated SHT45 bus
+    EX_IO(0) <= '0' when sht_sda_oen = '0' else 'Z'; -- JP4 pin 13 / PIN_J10
+    EX_IO(1) <= '0' when sht_scl_oen = '0' else 'Z'; -- JP4 pin 11 / PIN_J14
+    sht_sda_in <= EX_IO(0);
+    sht_scl_in <= EX_IO(1);
 
-    GPIO(2) <= uart_tx;
-    uart_rx <= GPIO(3);
+    -- JP5 40-pin header: dedicated BMP280 bus and SPS30 UART
+    GPIO(4) <= '0' when bmp_sda_oen = '0' else 'Z'; -- PIN_AC21
+    GPIO(5) <= '0' when bmp_scl_oen = '0' else 'Z'; -- PIN_Y16
+    bmp_sda_in <= GPIO(4);
+    bmp_scl_in <= GPIO(5);
+
+    GPIO(2) <= uart_tx;                              -- PIN_AB21 -> SPS30 RX
+    uart_rx <= GPIO(3);                              -- PIN_Y17  <- SPS30 TX
 
     u_sensor_hub : entity work.sensor_hub
         port map (
-            clk         => CLOCK_50,
-            reset_n     => reset_n,
-            demo_mode   => SW(17),
-            sec_tick    => sec_tick,
-            i2c_sda_in  => i2c_sda_in,
-            i2c_scl_in  => i2c_scl_in,
-            i2c_sda_oen => i2c_sda_oen,
-            i2c_scl_oen => i2c_scl_oen,
-            uart_rx     => uart_rx,
-            uart_tx     => uart_tx,
-            temp_x10    => temp_x10,
-            humid_x10   => humid_x10,
-            press_hpa   => press_hpa,
-            pm25_x10    => pm25_x10,
-            light_pct   => light_pct,
-            sensor_valid=> sensor_valid,
-            sensor_tick => sensor_tick,
-            bus_active  => bus_active
+            clk           => CLOCK_50,
+            reset_n       => reset_n,
+            demo_mode     => SW(17),
+            sec_tick      => sec_tick,
+            sht_sda_in    => sht_sda_in,
+            sht_scl_in    => sht_scl_in,
+            sht_sda_oen   => sht_sda_oen,
+            sht_scl_oen   => sht_scl_oen,
+            bmp_sda_in    => bmp_sda_in,
+            bmp_scl_in    => bmp_scl_in,
+            bmp_sda_oen   => bmp_sda_oen,
+            bmp_scl_oen   => bmp_scl_oen,
+            uart_rx       => uart_rx,
+            uart_tx       => uart_tx,
+            temp_x10      => temp_x10,
+            humid_x10     => humid_x10,
+            press_hpa     => press_hpa,
+            pm25_x10      => pm25_x10,
+            light_pct     => light_pct,
+            sensor_valid  => sensor_valid,
+            sensor_tick   => sensor_tick,
+            bus_active    => bus_active
         );
 
     u_status : entity work.status_logic

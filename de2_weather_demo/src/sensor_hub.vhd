@@ -8,10 +8,14 @@ entity sensor_hub is
         reset_n      : in  std_logic;
         demo_mode    : in  std_logic;
         sec_tick     : in  std_logic;
-        i2c_sda_in   : in  std_logic;
-        i2c_scl_in   : in  std_logic;
-        i2c_sda_oen  : out std_logic;
-        i2c_scl_oen  : out std_logic;
+        sht_sda_in   : in  std_logic;
+        sht_scl_in   : in  std_logic;
+        sht_sda_oen  : out std_logic;
+        sht_scl_oen  : out std_logic;
+        bmp_sda_in   : in  std_logic;
+        bmp_scl_in   : in  std_logic;
+        bmp_sda_oen  : out std_logic;
+        bmp_scl_oen  : out std_logic;
         uart_rx      : in  std_logic;
         uart_tx      : out std_logic;
         temp_x10     : out integer range 0 to 999;
@@ -42,7 +46,8 @@ architecture rtl of sensor_hub is
     signal bmp_valid       : std_logic := '0';
     signal sps_valid       : std_logic := '0';
     signal tick_pulse      : std_logic := '0';
-    signal active_i2c      : std_logic := '0';
+    signal active_sht      : std_logic := '0';
+    signal active_bmp      : std_logic := '0';
     signal active_uart     : std_logic := '0';
 begin
     process (clk, reset_n)
@@ -84,19 +89,19 @@ begin
         end if;
     end process;
 
-    -- These are compileable starter stubs.
-    -- Replace their internals with real sensor transactions as you bring each sensor up.
     u_sht45 : entity work.sht45_stub
         port map (
             clk         => clk,
             reset_n     => reset_n,
-            poll_tick    => sec_tick,
-            i2c_sda_in  => i2c_sda_in,
-            i2c_scl_in  => i2c_scl_in,
+            poll_tick   => sec_tick,
+            i2c_sda_in  => sht_sda_in,
+            i2c_scl_in  => sht_scl_in,
+            i2c_sda_oen => sht_sda_oen,
+            i2c_scl_oen => sht_scl_oen,
             temp_x10    => sht_temp_x10,
             humid_x10   => sht_humid_x10,
             valid       => sht_valid,
-            active      => active_i2c
+            active      => active_sht
         );
 
     u_bmp280 : entity work.bmp280_stub
@@ -104,11 +109,13 @@ begin
             clk         => clk,
             reset_n     => reset_n,
             poll_tick   => sec_tick,
-            i2c_sda_in  => i2c_sda_in,
-            i2c_scl_in  => i2c_scl_in,
+            i2c_sda_in  => bmp_sda_in,
+            i2c_scl_in  => bmp_scl_in,
+            i2c_sda_oen => bmp_sda_oen,
+            i2c_scl_oen => bmp_scl_oen,
             press_hpa   => bmp_press_hpa,
             valid       => bmp_valid,
-            active      => open
+            active      => active_bmp
         );
 
     u_sps30 : entity work.sps30_uart_stub
@@ -123,9 +130,6 @@ begin
             active      => active_uart
         );
 
-    i2c_sda_oen <= '1';
-    i2c_scl_oen <= '1';
-
     temp_x10 <= demo_temp_x10 when demo_mode = '1' else sht_temp_x10;
     humid_x10 <= demo_humid_x10 when demo_mode = '1' else sht_humid_x10;
     press_hpa <= demo_press_hpa when demo_mode = '1' else bmp_press_hpa;
@@ -134,5 +138,5 @@ begin
 
     sensor_valid <= '1' when demo_mode = '1' else (sht_valid and bmp_valid and sps_valid);
     sensor_tick <= tick_pulse;
-    bus_active <= active_i2c or active_uart or heartbeat;
+    bus_active <= active_sht or active_bmp or active_uart or heartbeat;
 end architecture;
