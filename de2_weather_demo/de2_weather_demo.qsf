@@ -1,6 +1,6 @@
 set_global_assignment -name FAMILY "Cyclone IV E"
 set_global_assignment -name DEVICE EP4CE115F29C7
-set_global_assignment -name TOP_LEVEL_ENTITY weather_station_top
+set_global_assignment -name TOP_LEVEL_ENTITY FPGA_Final_Project_Weather
 set_global_assignment -name VHDL_INPUT_VERSION VHDL_93
 
 set_location_assignment PIN_Y2 -to CLOCK_50
