@@ -62,7 +62,7 @@ architecture rtl of sps30_uart_stub is
         variable scaled : integer;
         variable shiftv : integer;
     begin
-        word_v := unsigned(b0 & b1 & b2 & b3);
+        word_v := unsigned(std_logic_vector'(b0 & b1 & b2 & b3));
         if word_v(31) = '1' then
             return 0;
         end if;

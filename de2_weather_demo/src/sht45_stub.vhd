@@ -44,7 +44,7 @@ architecture rtl of sht45_stub is
         variable crc  : unsigned(7 downto 0) := x"FF";
         variable data : unsigned(15 downto 0);
     begin
-        data := unsigned(d0 & d1);
+        data := unsigned(std_logic_vector'(d0 & d1));
         for i in 15 downto 0 loop
             if (crc(7) xor data(i)) = '1' then
                 crc := shift_left(crc, 1) xor x"31";
@@ -258,8 +258,8 @@ begin
 
                 when ST_PROCESS =>
                     if (crc8_sht(data0, data1) = data2) and (crc8_sht(data3, data4) = data5) then
-                        raw_t := to_integer(unsigned(data0 & data1));
-                        raw_rh := to_integer(unsigned(data3 & data4));
+                        raw_t := to_integer(unsigned(std_logic_vector'(data0 & data1)));
+                        raw_rh := to_integer(unsigned(std_logic_vector'(data3 & data4)));
                         calc_t := -450 + ((1750 * raw_t + 32767) / 65535);
                         calc_rh := -60 + ((1250 * raw_rh + 32767) / 65535);
                         if calc_t < 0 then

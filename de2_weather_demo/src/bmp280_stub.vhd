@@ -56,7 +56,7 @@ architecture rtl of bmp280_stub is
 
     function u16_le(lo_b, hi_b : std_logic_vector(7 downto 0)) return integer is
     begin
-        return to_integer(unsigned(hi_b & lo_b));
+        return to_integer(unsigned(std_logic_vector'(hi_b & lo_b)));
     end function;
 
     function s16_le(lo_b, hi_b : std_logic_vector(7 downto 0)) return integer is
@@ -466,8 +466,8 @@ begin
                     end if;
 
                 when ST_CALC =>
-                    adc_p := to_integer(unsigned(data_bytes(0) & data_bytes(1) & data_bytes(2)(7 downto 4)));
-                    adc_t := to_integer(unsigned(data_bytes(3) & data_bytes(4) & data_bytes(5)(7 downto 4)));
+                    adc_p := to_integer(unsigned(std_logic_vector'(data_bytes(0) & data_bytes(1) & data_bytes(2)(7 downto 4))));
+                    adc_t := to_integer(unsigned(std_logic_vector'(data_bytes(3) & data_bytes(4) & data_bytes(5)(7 downto 4))));
 
                     var1_s := shift_right(mul64(shift_right(s64(adc_t), 3) - shift_left(s64(dig_t1), 1), s64(dig_t2)), 11);
                     tmp_s := shift_right(s64(adc_t), 4) - s64(dig_t1);
