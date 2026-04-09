@@ -48,3 +48,6 @@ Bring-up order:
 If your existing Quartus project uses a different top-level name, either:
   - change the project top-level to FPGA_Final_Project_Weather, or
   - use the included de2_weather_demo.qsf where TOP_LEVEL_ENTITY is already set.
+
+
+Important for Quartus: this QSF now explicitly includes every VHDL source file. If you use an existing project, replace its QSF with de2_weather_demo.qsf from this archive or manually add src/i2c_byte_master.vhd, src/uart_tx.vhd, and src/uart_rx.vhd at minimum.
