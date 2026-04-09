@@ -61,7 +61,7 @@ architecture rtl of bmp280_stub is
 
     function s16_le(lo_b, hi_b : std_logic_vector(7 downto 0)) return integer is
     begin
-        return to_integer(signed(hi_b & lo_b));
+        return to_integer(signed(std_logic_vector'(hi_b & lo_b)));
     end function;
 
     constant ADDR76_W : std_logic_vector(7 downto 0) := x"EC";
