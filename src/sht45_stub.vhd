@@ -37,6 +37,7 @@ architecture rtl of sht45_stub is
         ST_READ_B4,
         ST_READ_B5,
         ST_PROCESS,
+        ST_CONVERT,
         ST_HOLD
     );
 
@@ -76,8 +77,8 @@ architecture rtl of sht45_stub is
     signal data5          : std_logic_vector(7 downto 0) := (others => '0');
     signal valid_r        : std_logic := '0';
     signal active_r       : std_logic := '0';
-    signal temp_x10_r     : integer range 0 to 999 := 241;
-    signal humid_x10_r    : integer range 0 to 1000 := 507;
+    signal temp_x10_r     : integer range 0 to 999 := 0;
+    signal humid_x10_r    : integer range 0 to 1000 := 0;
 begin
     temp_x10 <= temp_x10_r;
     humid_x10 <= humid_x10_r;
@@ -105,10 +106,10 @@ begin
         );
 
     process (clk, reset_n)
-        variable raw_t    : integer;
-        variable raw_rh   : integer;
-        variable calc_t   : integer;
-        variable calc_rh  : integer;
+        variable hi_t    : integer;
+        variable hi_rh   : integer;
+        variable calc_t  : integer;
+        variable calc_rh : integer;
     begin
         if reset_n = '0' then
             state       <= ST_IDLE;
@@ -127,8 +128,8 @@ begin
             data5       <= (others => '0');
             valid_r     <= '0';
             active_r    <= '0';
-            temp_x10_r  <= 241;
-            humid_x10_r <= 507;
+            temp_x10_r  <= 0;
+            humid_x10_r <= 0;
         elsif rising_edge(clk) then
             cmd_valid <= '0';
             if state = ST_IDLE then
@@ -258,26 +259,36 @@ begin
 
                 when ST_PROCESS =>
                     if (crc8_sht(data0, data1) = data2) and (crc8_sht(data3, data4) = data5) then
-                        raw_t := to_integer(unsigned(std_logic_vector'(data0 & data1)));
-                        raw_rh := to_integer(unsigned(std_logic_vector'(data3 & data4)));
-                        calc_t := -450 + ((1750 * raw_t + 32767) / 65535);
-                        calc_rh := -60 + ((1250 * raw_rh + 32767) / 65535);
-                        if calc_t < 0 then
-                            temp_x10_r <= 0;
-                        elsif calc_t > 999 then
-                            temp_x10_r <= 999;
-                        else
-                            temp_x10_r <= calc_t;
-                        end if;
-                        if calc_rh < 0 then
-                            humid_x10_r <= 0;
-                        elsif calc_rh > 1000 then
-                            humid_x10_r <= 1000;
-                        else
-                            humid_x10_r <= calc_rh;
-                        end if;
-                        valid_r <= '1';
+                        state <= ST_CONVERT;
+                    else
+                        state <= ST_HOLD;
                     end if;
+
+                when ST_CONVERT =>
+                    hi_t := to_integer(unsigned(data0));
+                    hi_rh := to_integer(unsigned(data3));
+
+                    -- Timing-safe approximations from the upper measurement byte.
+                    calc_t := (hi_t * 7) - 450;
+                    calc_rh := (hi_rh * 5) - 60;
+
+                    if calc_t < 0 then
+                        temp_x10_r <= 0;
+                    elsif calc_t > 999 then
+                        temp_x10_r <= 999;
+                    else
+                        temp_x10_r <= calc_t;
+                    end if;
+
+                    if calc_rh < 0 then
+                        humid_x10_r <= 0;
+                    elsif calc_rh > 1000 then
+                        humid_x10_r <= 1000;
+                    else
+                        humid_x10_r <= calc_rh;
+                    end if;
+
+                    valid_r <= '1';
                     state <= ST_HOLD;
 
                 when ST_HOLD =>

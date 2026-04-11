@@ -1,33 +1,46 @@
 library ieee;
 use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
 entity vga_dashboard is
     port (
-        clk25         : in  std_logic;
-        reset_n       : in  std_logic;
-        temp_x10      : in  integer range 0 to 999;
-        humid_x10     : in  integer range 0 to 1000;
-        press_hpa     : in  integer range 300 to 1200;
-        pm25_x10      : in  integer range 0 to 2000;
-        light_pct     : in  integer range 0 to 100;
-        temp_status   : in  std_logic_vector(1 downto 0);
-        humid_status  : in  std_logic_vector(1 downto 0);
-        press_status  : in  std_logic_vector(1 downto 0);
-        pm_status     : in  std_logic_vector(1 downto 0);
-        demo_mode     : in  std_logic;
-        sensor_valid  : in  std_logic;
-        sensor_tick   : in  std_logic;
-        vga_r         : out std_logic_vector(7 downto 0);
-        vga_g         : out std_logic_vector(7 downto 0);
-        vga_b         : out std_logic_vector(7 downto 0);
-        vga_hs        : out std_logic;
-        vga_vs        : out std_logic;
-        vga_blank_n   : out std_logic;
-        vga_sync_n    : out std_logic
+        clk          : in  std_logic;
+        pix_ce       : in  std_logic;
+        reset_n      : in  std_logic;
+        temp_x10     : in  integer range 0 to 999;
+        humid_x10    : in  integer range 0 to 1000;
+        press_hpa    : in  integer range 300 to 1200;
+        pm25_x10     : in  integer range 0 to 2000;
+        light_pct    : in  integer range 0 to 100;
+        temp_status  : in  std_logic_vector(1 downto 0);
+        humid_status : in  std_logic_vector(1 downto 0);
+        press_status : in  std_logic_vector(1 downto 0);
+        pm_status    : in  std_logic_vector(1 downto 0);
+        sensor_valid : in  std_logic;
+        sensor_tick  : in  std_logic;
+        remote_fresh : in  std_logic;
+        vga_r        : out std_logic_vector(7 downto 0);
+        vga_g        : out std_logic_vector(7 downto 0);
+        vga_b        : out std_logic_vector(7 downto 0);
+        vga_hs       : out std_logic;
+        vga_vs       : out std_logic;
+        vga_blank_n  : out std_logic;
+        vga_sync_n   : out std_logic
     );
 end entity;
 
 architecture rtl of vga_dashboard is
+    function clamp(value, lo, hi : integer) return integer is
+    begin
+        if value < lo then
+            return lo;
+        elsif value > hi then
+            return hi;
+        else
+            return value;
+        end if;
+    end function;
+
     signal x        : integer range 0 to 799;
     signal y        : integer range 0 to 524;
     signal visible  : std_logic;
@@ -43,7 +56,8 @@ architecture rtl of vga_dashboard is
 begin
     u_timing : entity work.vga_timing_640x480
         port map (
-            clk25   => clk25,
+            clk     => clk,
+            pix_ce  => pix_ce,
             reset_n => reset_n,
             hcount  => x,
             vcount  => y,
@@ -54,33 +68,31 @@ begin
             sync_n  => vga_sync_n
         );
 
-    temp_bar  <= (temp_x10 * 500) / 400;
-    humid_bar <= (humid_x10 * 500) / 1000;
-    press_bar <= ((press_hpa - 900) * 500) / 200;
-    pm_bar    <= (pm25_x10 * 500) / 500;
-    light_bar <= light_pct * 5;
+    temp_bar  <= clamp((temp_x10 * 500) / 400, 0, 500);
+    humid_bar <= clamp((humid_x10 * 500) / 1000, 0, 500);
+    press_bar <= clamp(((press_hpa - 900) * 500) / 200, 0, 500);
+    pm_bar    <= clamp(pm25_x10, 0, 500);
+    light_bar <= clamp(light_pct * 5, 0, 500);
 
     process (x, y, visible, temp_bar, humid_bar, press_bar, pm_bar, light_bar,
-             temp_status, humid_status, press_status, pm_status, demo_mode, sensor_valid, sensor_tick)
+             temp_status, humid_status, press_status, pm_status,
+             sensor_valid, sensor_tick, remote_fresh)
     begin
         r <= (others => '0');
         g <= (others => '0');
         b <= (others => '0');
 
         if visible = '1' then
-            -- background
             r <= x"08";
             g <= x"08";
             b <= x"14";
 
-            -- panel separators
             if (y = 60) or (y = 150) or (y = 240) or (y = 330) or (y = 420) then
                 r <= x"40";
                 g <= x"40";
                 b <= x"40";
             end if;
 
-            -- left status blocks
             if (x >= 20 and x < 60) and (y >= 80 and y < 130) then
                 if temp_status = "00" then r <= x"00"; g <= x"D0"; b <= x"20";
                 elsif temp_status = "01" then r <= x"40"; g <= x"80"; b <= x"FF";
@@ -99,7 +111,6 @@ begin
                 else r <= x"FF"; g <= x"20"; b <= x"20"; end if;
             end if;
 
-            -- bar graph tracks
             if (x >= 100 and x < 600) and (y >= 90 and y < 120) then
                 r <= x"20"; g <= x"20"; b <= x"20";
                 if x < 100 + temp_bar then r <= x"FF"; g <= x"60"; b <= x"40"; end if;
@@ -117,23 +128,43 @@ begin
                 if x < 100 + light_bar then r <= x"FF"; g <= x"FF"; b <= x"60"; end if;
             end if;
 
-            -- mode / valid banners
             if (x >= 0 and x < 640) and (y >= 0 and y < 30) then
-                if demo_mode = '1' then
-                    r <= x"00"; g <= x"90"; b <= x"D0";
+                if remote_fresh = '1' then
+                    r <= x"70";
+                    g <= x"20";
+                    b <= x"D0";
                 elsif sensor_valid = '1' then
-                    r <= x"00"; g <= x"B0"; b <= x"20";
+                    r <= x"00";
+                    g <= x"B0";
+                    b <= x"20";
                 else
-                    r <= x"C0"; g <= x"20"; b <= x"20";
+                    r <= x"C0";
+                    g <= x"20";
+                    b <= x"20";
                 end if;
             end if;
 
-            -- heartbeat square in upper-right corner
+            if (x >= 560 and x < 590) and (y >= 90 and y < 120) then
+                if remote_fresh = '1' then
+                    r <= x"60";
+                    g <= x"FF";
+                    b <= x"FF";
+                else
+                    r <= x"20";
+                    g <= x"20";
+                    b <= x"20";
+                end if;
+            end if;
+
             if (x >= 600 and x < 630) and (y >= 90 and y < 120) then
                 if sensor_tick = '1' then
-                    r <= x"FF"; g <= x"FF"; b <= x"FF";
+                    r <= x"FF";
+                    g <= x"FF";
+                    b <= x"FF";
                 else
-                    r <= x"30"; g <= x"30"; b <= x"30";
+                    r <= x"30";
+                    g <= x"30";
+                    b <= x"30";
                 end if;
             end if;
         end if;

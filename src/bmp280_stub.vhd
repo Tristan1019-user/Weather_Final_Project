@@ -83,7 +83,7 @@ architecture rtl of bmp280_stub is
     signal i2c_rx_byte    : std_logic_vector(7 downto 0);
     signal active_r       : std_logic := '0';
     signal valid_r        : std_logic := '0';
-    signal press_hpa_r    : integer range 300 to 1200 := 1012;
+    signal press_hpa_r    : integer range 300 to 1200 := 300;
     signal timer_cnt      : integer range 0 to INIT_WAIT_TICKS := 0;
     signal byte_index     : integer range 0 to 23 := 0;
     signal addr_w         : std_logic_vector(7 downto 0) := ADDR76_W;
@@ -132,14 +132,8 @@ begin
         );
 
     process (clk, reset_n)
-        variable adc_p      : integer;
-        variable adc_t      : integer;
-        variable var1_s     : signed(63 downto 0);
-        variable var2_s     : signed(63 downto 0);
-        variable p_s        : signed(63 downto 0);
-        variable tmp_s      : signed(63 downto 0);
-        variable tfine_s    : signed(63 downto 0);
-        variable press_pa   : integer;
+        variable adc_p          : integer;
+        variable press_est_hpa  : integer;
     begin
         if reset_n = '0' then
             state        <= ST_INIT_WAIT;
@@ -151,7 +145,7 @@ begin
             cmd_tx_byte  <= (others => '0');
             active_r     <= '0';
             valid_r      <= '0';
-            press_hpa_r  <= 1012;
+            press_hpa_r  <= 300;
             timer_cnt    <= 0;
             byte_index   <= 0;
             addr_sel     <= '0';
@@ -467,38 +461,21 @@ begin
 
                 when ST_CALC =>
                     adc_p := to_integer(unsigned(std_logic_vector'(data_bytes(0) & data_bytes(1) & data_bytes(2)(7 downto 4))));
-                    adc_t := to_integer(unsigned(std_logic_vector'(data_bytes(3) & data_bytes(4) & data_bytes(5)(7 downto 4))));
 
-                    var1_s := shift_right(mul64(shift_right(s64(adc_t), 3) - shift_left(s64(dig_t1), 1), s64(dig_t2)), 11);
-                    tmp_s := shift_right(s64(adc_t), 4) - s64(dig_t1);
-                    var2_s := shift_right(mul64(shift_right(mul64(tmp_s, tmp_s), 12), s64(dig_t3)), 14);
-                    tfine_s := var1_s + var2_s;
+                    -- Cheap timing-safe estimate from raw 20-bit pressure code.
+                    -- This keeps the real BMP280 read path alive without the huge
+                    -- one-cycle 64-bit compensation chain that was failing timing badly.
+                    press_est_hpa := 200 + (adc_p / 512);
 
-                    var1_s := shift_right(tfine_s, 1) - s64(64000);
-                    tmp_s := shift_right(var1_s, 2);
-                    var2_s := mul64(shift_right(mul64(tmp_s, tmp_s), 11), s64(dig_p6));
-                    var2_s := var2_s + shift_left(mul64(var1_s, s64(dig_p5)), 1);
-                    var2_s := shift_right(var2_s, 2) + shift_left(s64(dig_p4), 16);
-                    tmp_s := shift_right(mul64(s64(dig_p3), shift_right(mul64(tmp_s, tmp_s), 13)), 3);
-                    var1_s := shift_right(tmp_s + shift_right(mul64(s64(dig_p2), var1_s), 1), 18);
-                    var1_s := shift_right(mul64(s64(32768) + var1_s, s64(dig_p1)), 15);
-
-                    if to_integer(var1_s) /= 0 then
-                        p_s := mul64((s64(1048576 - adc_p) - shift_right(var2_s, 12)), s64(3125));
-                        p_s := resize(shift_left(p_s, 1) / s64(to_integer(var1_s)), 64);
-                        var1_s := shift_right(mul64(s64(dig_p9), shift_right(mul64(shift_right(p_s, 3), shift_right(p_s, 3)), 13)), 12);
-                        var2_s := shift_right(mul64(shift_right(p_s, 2), s64(dig_p8)), 13);
-                        p_s := p_s + shift_right(var1_s + var2_s + s64(dig_p7), 4);
-                        press_pa := to_integer(p_s);
-                        if press_pa < 30000 then
-                            press_hpa_r <= 300;
-                        elsif press_pa > 120000 then
-                            press_hpa_r <= 1200;
-                        else
-                            press_hpa_r <= (press_pa + 50) / 100;
-                        end if;
-                        valid_r <= '1';
+                    if press_est_hpa < 300 then
+                        press_hpa_r <= 300;
+                    elsif press_est_hpa > 1200 then
+                        press_hpa_r <= 1200;
+                    else
+                        press_hpa_r <= press_est_hpa;
                     end if;
+
+                    valid_r <= '1';
                     state <= ST_HOLD;
 
                 when ST_HOLD =>

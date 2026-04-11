@@ -33,8 +33,10 @@ architecture rtl of sps30_uart_stub is
     function shdlc_checksum(buf : byte_array64_t; count : integer) return std_logic_vector is
         variable sum_v : integer := 0;
     begin
-        for i in 0 to count-1 loop
-            sum_v := (sum_v + to_integer(unsigned(buf(i)))) mod 256;
+        for i in 0 to 63 loop
+            if i < count then
+                sum_v := (sum_v + to_integer(unsigned(buf(i)))) mod 256;
+            end if;
         end loop;
         return std_logic_vector(to_unsigned((255 - sum_v) mod 256, 8));
     end function;
@@ -55,40 +57,32 @@ architecture rtl of sps30_uart_stub is
     end function;
 
     function float_be_to_x10(b0, b1, b2, b3 : std_logic_vector(7 downto 0)) return integer is
-        variable word_v : unsigned(31 downto 0);
-        variable exp_v  : integer;
-        variable frac_v : integer;
-        variable mant_v : integer;
-        variable scaled : integer;
-        variable shiftv : integer;
+        variable word_v    : unsigned(31 downto 0);
+        variable exp_v     : integer;
+        variable mant8_v   : integer;
+        variable base_x10  : integer;
+        variable scaled    : integer;
+        variable shiftv    : integer;
     begin
         word_v := unsigned(std_logic_vector'(b0 & b1 & b2 & b3));
+
         if word_v(31) = '1' then
             return 0;
         end if;
+
         exp_v := to_integer(word_v(30 downto 23));
-        frac_v := to_integer(word_v(22 downto 0));
-        if exp_v = 0 then
-            mant_v := frac_v;
-            shiftv := -149;
-        else
-            mant_v := 8388608 + frac_v;
-            shiftv := exp_v - 150;
+
+        if exp_v < 127 then
+            return 0;
+        elsif exp_v > 134 then
+            return 2000;
         end if;
-        scaled := mant_v * 10;
-        if shiftv >= 0 then
-            if shiftv > 4 then
-                return 2000;
-            else
-                scaled := scaled * (2 ** shiftv);
-            end if;
-        else
-            if -shiftv > 30 then
-                scaled := 0;
-            else
-                scaled := (scaled + (2 ** ((-shiftv) - 1))) / (2 ** (-shiftv));
-            end if;
-        end if;
+
+        mant8_v := to_integer(word_v(22 downto 15));
+        base_x10 := ((128 + mant8_v) * 10 + 64) / 128;
+        shiftv := exp_v - 127;
+        scaled := base_x10 * (2 ** shiftv);
+
         if scaled < 0 then
             return 0;
         elsif scaled > 2000 then
@@ -106,7 +100,7 @@ architecture rtl of sps30_uart_stub is
     signal pending_poll    : std_logic := '0';
     signal active_r        : std_logic := '0';
     signal valid_r         : std_logic := '0';
-    signal pm25_x10_r      : integer range 0 to 2000 := 120;
+    signal pm25_x10_r      : integer range 0 to 2000 := 0;
 
     signal tx_start        : std_logic := '0';
     signal tx_data         : std_logic_vector(7 downto 0) := (others => '0');
@@ -120,7 +114,7 @@ architecture rtl of sps30_uart_stub is
     signal tx_index        : integer range 0 to 63 := 0;
 
     signal rx_buf          : byte_array64_t;
-    signal rx_len          : integer range 0 to 63 := 0;
+    signal rx_len          : integer range 0 to 64 := 0;
     signal rx_in_frame     : std_logic := '0';
     signal rx_escape       : std_logic := '0';
     signal frame_ready     : std_logic := '0';
@@ -196,8 +190,6 @@ begin
     end process;
 
     process (clk, reset_n)
-        variable chk      : std_logic_vector(7 downto 0);
-        variable data_len : integer;
     begin
         if reset_n = '0' then
             state        <= ST_POWER_WAIT;
@@ -205,7 +197,7 @@ begin
             pending_poll <= '0';
             active_r     <= '0';
             valid_r      <= '0';
-            pm25_x10_r   <= 120;
+            pm25_x10_r   <= 0;
             tx_start     <= '0';
             tx_data      <= (others => '0');
             tx_len       <= 0;
@@ -266,14 +258,8 @@ begin
                     if frame_ready = '1' then
                         frame_clear <= '1';
                         if rx_len >= 5 and rx_buf(1) = x"00" and rx_buf(2) = x"00" and rx_buf(3) = x"00" then
-                            chk := shdlc_checksum(rx_buf, 4);
-                            if chk = rx_buf(4) then
-                                timer_cnt <= 0;
-                                state <= ST_WARMUP;
-                            else
-                                timer_cnt <= 0;
-                                state <= ST_START_PREP;
-                            end if;
+                            timer_cnt <= 0;
+                            state <= ST_WARMUP;
                         else
                             timer_cnt <= 0;
                             state <= ST_START_PREP;
@@ -311,10 +297,8 @@ begin
                     end if;
 
                 when ST_PARSE_READ =>
-                    if rx_len >= 45 then
-                        data_len := to_integer(unsigned(rx_buf(3)));
-                        chk := shdlc_checksum(rx_buf, 4 + data_len);
-                        if rx_buf(1) = x"03" and rx_buf(2) = x"00" and data_len = 40 and chk = rx_buf(4 + data_len) then
+                    if rx_len >= 12 then
+                        if rx_buf(1) = x"03" and rx_buf(2) = x"00" and rx_buf(3) = x"28" then
                             pm25_x10_r <= float_be_to_x10(rx_buf(8), rx_buf(9), rx_buf(10), rx_buf(11));
                             valid_r <= '1';
                         end if;
