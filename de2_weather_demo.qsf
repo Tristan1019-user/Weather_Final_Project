@@ -2,11 +2,13 @@ set_global_assignment -name FAMILY "Cyclone IV E"
 set_global_assignment -name DEVICE EP4CE115F29C7
 set_global_assignment -name TOP_LEVEL_ENTITY FPGA_Final_Project_Weather
 set_global_assignment -name VHDL_INPUT_VERSION VHDL_93
-
+set_global_assignment -name SDC_FILE FPGA_Final.sdc
 
 set_global_assignment -name VHDL_FILE src/i2c_byte_master.vhd
 set_global_assignment -name VHDL_FILE src/uart_tx.vhd
 set_global_assignment -name VHDL_FILE src/uart_rx.vhd
+set_global_assignment -name VHDL_FILE src/host_uart_link.vhd
+set_global_assignment -name VHDL_FILE src/debug_uart_telemetry.vhd
 set_global_assignment -name VHDL_FILE src/hex7seg.vhd
 set_global_assignment -name VHDL_FILE src/vga_timing_640x480.vhd
 set_global_assignment -name VHDL_FILE src/vga_dashboard.vhd

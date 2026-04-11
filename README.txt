@@ -1,62 +1,55 @@
-DE2-115 weather station starter project
+DE2-115 weather station real-driver project
 
 What this is
-- A compileable Quartus starter project for the DE2-115.
-- It gives you a working VGA dashboard demo right away.
-- It uses SW[17] to select demo mode.
-- In demo mode, the values animate so you can prove the board, VGA, HEX displays, and top-level integration.
-- It also exposes the sensor wiring pins and includes sensor stub files where you can drop in real I2C and UART transactions next.
+- A Quartus project for the DE2-115 using real SHT45, BMP280, and SPS30 driver blocks.
+- It keeps the existing VGA dashboard and HEX displays.
+- It now also includes a dedicated host UART so the FPGA can send sensor data to a laptop/server,
+  receive a returned classification, and display that result on VGA.
 
 What this is not
-- This is not a fully tested production-ready sensor implementation.
-- The SHT45, BMP280, and SPS30 files are stubs with TODO notes.
-- I did this so you can compile now, demo now, and then replace one sensor at a time without rebuilding the whole project.
+- This is not the older demo/stub-only branch.
+- This is not a finished ML backend.
+- The host UART path is the transport layer that lets your laptop and server own the AI side.
 
-Board controls
-- KEY[0]: active-low reset
-- SW[17] = 1: demo mode with animated values
-- SW[17] = 0: sensor-stub mode
+Current sensor/header use
+- EX_IO[0] / EX_IO[1] = SHT45 I2C
+- GPIO[2] / GPIO[3]   = SPS30 UART
+- GPIO[4] / GPIO[5]   = BMP280 I2C
+- GPIO[6] / GPIO[7]   = new host UART for the USB-TTL adapter
+- GPIO[0]             = optional debug UART TX only
 
-Displayed values
-- HEX1 HEX0: temperature in whole degrees C
-- HEX3 HEX2: humidity in whole percent
-- HEX7 HEX6 HEX5 HEX4: pressure in hPa
+USB-TTL adapter wiring for the host path
+- Set the adapter to 3.3V TTL mode
+- GPIO[6] FPGA TX -> adapter RXD
+- GPIO[7] FPGA RX <- adapter TXD
+- adapter GND -> board ground
+- leave adapter VCC disconnected
+- do not put 5V logic into FPGA pins
 
-LEDs
-- LEDG[0]: sensor_valid
-- LEDG[1]: bus_active
-- LEDG[2]: sensor_tick
-- LEDG[3]: demo mode switch state
-- LEDG[4:7]: status bits
-- LEDG[8]: one-second heartbeat
+Runtime behavior
+- Sensors run as before.
+- Once per second, the FPGA emits a compact telemetry line over the host UART.
+- The laptop/server can return a compact classification line.
+- VGA uses the remote classification while it is fresh.
+- If the remote result goes stale, the design automatically falls back to the local status classifier.
 
-Recommended sensor wiring
-- GPIO[0] / PIN_AB22: I2C SDA for SHT45 and BMP280
-- GPIO[1] / PIN_AC15: I2C SCL for SHT45 and BMP280
-- GPIO[2] / PIN_AB21: FPGA UART TX to SPS30 RX
-- GPIO[3] / PIN_Y17 : FPGA UART RX from SPS30 TX
-- SHT45 power: 3.3V
-- BMP280 power: 3.3V
-- SPS30 power: 5V
-- Common ground everywhere
+Protocol summary
+- FPGA -> laptop:
+  - D,ss,ttt,hhhh,pppp,mmmm,lll,v,0
+- laptop/server -> FPGA:
+  - C,t,h,p,m
+- status digits:
+  - 0 -> "00"
+  - 1 -> "01"
+  - 2 -> "10"
 
-Important note
-- Keep the GPIO bank at 3.3V signaling.
-- Do not drive 5V into FPGA GPIO pins.
-- If you use a photoresistor later, you need an external ADC.
+Files most relevant to this path
+- src/weather_station_top.vhd
+- src/vga_dashboard.vhd
+- src/host_uart_link.vhd
+- src/uart_tx.vhd
+- src/uart_rx.vhd
+- README_real_drivers.txt
 
-Suggested next steps
-1. Create a new Quartus project and add all VHD files in src.
-2. Set weather_station_top as the top-level entity.
-3. Import or paste the assignments from de2_weather_demo.qsf.
-4. Compile and test VGA with SW[17] set high.
-5. Replace sht45_stub.vhd internals with a real SHT45 transaction.
-6. Replace bmp280_stub.vhd internals with a real BMP280 transaction.
-7. Replace sps30_uart_stub.vhd internals with a real SPS30 UART SHDLC transaction.
-
-Sensor bring-up order
-- SHT45 first
-- BMP280 second on the same I2C bus
-- SPS30 third on UART
-
-If you want to keep the initial demo simple, leave SW[17] high during the first board demo.
+Recommended next step
+- Compile this project, hook the adapter to GPIO[6]/GPIO[7], and test the host link before sensor validation.
