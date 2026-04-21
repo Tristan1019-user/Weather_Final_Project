@@ -4,7 +4,8 @@ use ieee.numeric_std.all;
 
 entity vga_timing_640x480 is
     port (
-        clk25      : in  std_logic;
+        clk        : in  std_logic;
+        pix_ce     : in  std_logic;
         reset_n    : in  std_logic;
         hcount     : out integer range 0 to 799;
         vcount     : out integer range 0 to 524;
@@ -20,21 +21,23 @@ architecture rtl of vga_timing_640x480 is
     signal h : integer range 0 to 799 := 0;
     signal v : integer range 0 to 524 := 0;
 begin
-    process (clk25, reset_n)
+    process (clk, reset_n)
     begin
         if reset_n = '0' then
             h <= 0;
             v <= 0;
-        elsif rising_edge(clk25) then
-            if h = 799 then
-                h <= 0;
-                if v = 524 then
-                    v <= 0;
+        elsif rising_edge(clk) then
+            if pix_ce = '1' then
+                if h = 799 then
+                    h <= 0;
+                    if v = 524 then
+                        v <= 0;
+                    else
+                        v <= v + 1;
+                    end if;
                 else
-                    v <= v + 1;
+                    h <= h + 1;
                 end if;
-            else
-                h <= h + 1;
             end if;
         end if;
     end process;

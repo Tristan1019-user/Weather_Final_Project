@@ -1,1 +1,29 @@
-*.rdr.flock
+# Quartus build outputs
+/db/
+/incremental_db/
+/output_files/
+/simulation/
+
+# Programming / reports / generated artifacts
+*.sof
+*.pof
+*.jam
+*.jbc
+*.rpt
+*.summary
+*.smsg
+*.qws
+*.jdi
+*.pin
+*.bak
+*.tmp
+*.ddb
+*.cmp
+*.eqn
+*.map
+*.fit
+*.sta
+
+# Python cache
+__pycache__/
+*.pyc
