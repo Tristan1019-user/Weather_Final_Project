@@ -406,7 +406,8 @@ architecture rtl of vga_dashboard is
 	 signal live_aqi : integer range 0 to 100 := 45;
 	 signal live_tmp : integer range 150 to 400 := 250;
 
-	 signal disp_lgt : integer range 0 to 100 := 50;
+	 signal disp_lgt     : integer range 0 to 100 := 50;
+	 signal lgt_from_sensor : integer range 0 to 100 := 0; -- inverted digital input
 	 signal disp_hum : integer range 0 to 100 := 55;
 	 signal disp_bar : integer range 0 to 100 := 60;
 	 signal disp_aqi : integer range 0 to 100 := 45;
@@ -523,9 +524,11 @@ begin
 		end process;
 					 
 		-- SW5=Live Demo: animated drift  SW4=Live Sensor: real ports (0 until sensor_valid)
-		disp_lgt <= live_lgt                        when sw(5) = '1' else
-		            light_pct                        when (sw(4) = '1' and sensor_valid = '1') else
-		            0                                when sw(4) = '1' else
+		-- LGT: digital input 0=day->100, 1=night->0
+		lgt_from_sensor <= 100 when light_pct = 0 else 0;
+		disp_lgt <= live_lgt        when sw(5) = '1' else
+		            lgt_from_sensor when (sw(4) = '1' and sensor_valid = '1') else
+		            0               when sw(4) = '1' else
 		            LGT_VALS(loc_idx);
 		disp_hum <= live_hum                        when sw(5) = '1' else
 		            (humid_x10 / 10)                when (sw(4) = '1' and sensor_valid = '1') else
@@ -535,10 +538,8 @@ begin
 		            ((press_hpa - 300) * 100 / 900) when (sw(4) = '1' and sensor_valid = '1') else
 		            0                               when sw(4) = '1' else
 		            BAR_VALS(loc_idx);
-		disp_aqi <= live_aqi                        when sw(5) = '1' else
-		            (pm25_x10 / 20)                 when (sw(4) = '1' and sensor_valid = '1') else
-		            0                               when sw(4) = '1' else
-		            AQI_VALS(loc_idx);
+		-- AQI sensor broken: fixed at 65 (green) in all modes
+		disp_aqi <= 65;
 		disp_tmp <= live_tmp                        when sw(5) = '1' else
 		            temp_x10                        when (sw(4) = '1' and sensor_valid = '1') else
 		            0                               when sw(4) = '1' else
@@ -627,8 +628,8 @@ begin
     -- Bar values fixed at compile-time (randomised initial values)
 
     -- LED thresholds
-    lgt_led <= "00" when (disp_lgt>=40 and disp_lgt<=60) else
-               "01" when disp_lgt>60 else "10";
+    -- LGT: digital day/night — day(100)=green, night(0)=red, no orange
+    lgt_led <= "00" when disp_lgt >= 50 else "10";
     hum_led <= "00" when (disp_hum>=40 and disp_hum<=60) else
                "10" when (disp_hum<20 or disp_hum>80) else "01";
     bar_led <= "00" when disp_bar>55 else "10" when disp_bar<35 else "01";
@@ -692,17 +693,6 @@ begin
     temp_disp_l <= (disp_tmp / 10) mod 10;
     temp_disp_f <= disp_tmp mod 10;
 
---    -- Location index
---    process(sw)
---    begin
---        if    sw(0)='1' then loc_idx<=0;
---        elsif sw(1)='1' then loc_idx<=1;
---        elsif sw(2)='1' then loc_idx<=2;
---        elsif sw(3)='1' then loc_idx<=3;
---        elsif sw(4)='1' then loc_idx<=4;
---        elsif sw(5)='1' then loc_idx<=5;
---        else                 loc_idx<=0; end if;
---    end process;
 
     in_header <= '1' when v_count<HEADER_H else '0';
 
