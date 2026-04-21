@@ -1,7 +1,6 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-<<<<<<< HEAD
 use work.weather_icons_pkg.all;  -- weather icon ROMs
 
 -- ============================================================
@@ -17,13 +16,6 @@ entity vga_dashboard is
 
     port (
         clk25        : in  std_logic;
-=======
-
-entity vga_dashboard is
-    port (
-        clk          : in  std_logic;
-        pix_ce       : in  std_logic;
->>>>>>> ee87c9df87af522d4b110eef90cac130d2313aeb
         reset_n      : in  std_logic;
         temp_x10     : in  integer range 0 to 999;
         humid_x10    : in  integer range 0 to 1000;
@@ -34,16 +26,11 @@ entity vga_dashboard is
         humid_status : in  std_logic_vector(1 downto 0);
         press_status : in  std_logic_vector(1 downto 0);
         pm_status    : in  std_logic_vector(1 downto 0);
-<<<<<<< HEAD
+		  hike_status : in std_logic_vector(1 downto 0);
         demo_mode    : in  std_logic;
         sensor_valid : in  std_logic;
         sensor_tick  : in  std_logic;
         sw           : in  std_logic_vector(5 downto 0);
-=======
-        sensor_valid : in  std_logic;
-        sensor_tick  : in  std_logic;
-        remote_fresh : in  std_logic;
->>>>>>> ee87c9df87af522d4b110eef90cac130d2313aeb
         vga_r        : out std_logic_vector(7 downto 0);
         vga_g        : out std_logic_vector(7 downto 0);
         vga_b        : out std_logic_vector(7 downto 0);
@@ -55,7 +42,6 @@ entity vga_dashboard is
 end entity;
 
 architecture rtl of vga_dashboard is
-<<<<<<< HEAD
 
     signal h_count : integer range 0 to 799 := 0;
     signal v_count : integer range 0 to 524 := 0;
@@ -349,6 +335,31 @@ architecture rtl of vga_dashboard is
             (32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32)
         )
     );
+	 constant LIVE_DEMO_TXT : string := "LIVE DEMO MODE";
+	 constant LIVE_DATA_TXT : string := "LIVE DATA MODE";
+	 
+	 
+	 type hike_row_t is array (0 to 33) of integer range 0 to 127;
+
+		constant HIKE_LABEL : hike_row_t := (
+			 0=>72, 1=>73, 2=>75, 3=>69, 4=>32, 5=>83, 6=>84, 7=>65, 8=>84, 9=>85, 10=>83, 11=>58,
+			 others=>32
+		);
+
+		constant HIKE_YES : hike_row_t := (
+			 0=>89, 1=>69, 2=>83,
+			 others=>32
+		);
+
+		constant HIKE_MAYBE : hike_row_t := (
+			 0=>77, 1=>65, 2=>89, 3=>66, 4=>69,
+			 others=>32
+		);
+
+		constant HIKE_NO : hike_row_t := (
+			 0=>78, 1=>79,
+			 others=>32
+		);
 
     -- Bar labels
     type label3_t is array (0 to 2) of integer range 0 to 127;
@@ -371,11 +382,11 @@ architecture rtl of vga_dashboard is
     -- Per-location fixed sensor values (randomised at compile)
     type loc_vals_t is array (0 to 5) of integer range 0 to 100;
     type loc_temp_t is array (0 to 5) of integer range 0 to 999;
-    constant LGT_VALS : loc_vals_t := (71, 51, 69, 82, 67, 42);
-    constant HUM_VALS : loc_vals_t := (63, 32, 82, 40, 64, 87);
-    constant BAR_VALS : loc_vals_t := (50, 36, 93, 78, 52, 68);
-    constant AQI_VALS : loc_vals_t := (52, 62, 41, 57, 49, 40);
-    constant TMP_VALS : loc_temp_t := (158, 286, 340, 302, 218, 342);
+    constant LGT_VALS : loc_vals_t := (48, 57, 72, 66, 31, 58);
+	 constant HUM_VALS : loc_vals_t := (52, 46, 68, 72, 85, 34);
+	 constant BAR_VALS : loc_vals_t := (74, 61, 45, 52, 28, 48);
+	 constant AQI_VALS : loc_vals_t := (81, 72, 44, 50, 22, 41);
+	 constant TMP_VALS : loc_temp_t := (224, 198, 287, 276, 342, 305);
 
     -- LED status
     signal lgt_led   : std_logic_vector(1 downto 0);
@@ -383,8 +394,26 @@ architecture rtl of vga_dashboard is
     signal bar_led   : std_logic_vector(1 downto 0);
     signal aqi_led   : std_logic_vector(1 downto 0);
     signal tmp_led   : std_logic_vector(1 downto 0);  -- 00=green 01=orange 10=red
+	 signal hike_demo_status : std_logic_vector(1 downto 0) := "01";
+	 
+	 signal auto_idx   : integer range 0 to 5 := 0;
+	 signal slow_count : integer range 0 to 49999999 := 0;
 
     signal loc_idx   : integer range 0 to 5 := 0;
+	 signal live_lgt : integer range 0 to 100 := 50;
+	 signal live_hum : integer range 0 to 100 := 55;
+	 signal live_bar : integer range 0 to 100 := 60;
+	 signal live_aqi : integer range 0 to 100 := 45;
+	 signal live_tmp : integer range 150 to 400 := 250;
+
+	 signal disp_lgt : integer range 0 to 100 := 50;
+	 signal disp_hum : integer range 0 to 100 := 55;
+	 signal disp_bar : integer range 0 to 100 := 60;
+	 signal disp_aqi : integer range 0 to 100 := 45;
+	 signal disp_tmp : integer range 0 to 400 := 0;
+	 signal header_txt : loc_str_t;
+	 signal header_len : integer range 1 to 24 := 24;
+		 
 
     -- Rendering
     signal in_header    : std_logic;
@@ -427,7 +456,141 @@ architecture rtl of vga_dashboard is
     signal icon_rom_addr : integer range 0 to ICON_ROM_DEPTH-1;
 
 begin
+	 process(lgt_led, hum_led, bar_led, aqi_led, tmp_led)
+			 variable red_count    : integer range 0 to 5;
+			 variable orange_count : integer range 0 to 5;
+		begin
+			 red_count := 0;
+			 orange_count := 0;
 
+			 if lgt_led = "10" then
+				  red_count := red_count + 1;
+				 elsif lgt_led = "01" then
+					  orange_count := orange_count + 1;
+				 end if;
+
+				 if hum_led = "10" then
+					  red_count := red_count + 1;
+				 elsif hum_led = "01" then
+					  orange_count := orange_count + 1;
+				 end if;
+
+				 if bar_led = "10" then
+					  red_count := red_count + 1;
+				 elsif bar_led = "01" then
+					  orange_count := orange_count + 1;
+				 end if;
+
+				 if aqi_led = "10" then
+					  red_count := red_count + 1;
+				 elsif aqi_led = "01" then
+					  orange_count := orange_count + 1;
+				 end if;
+
+				 if tmp_led = "10" then
+					  red_count := red_count + 1;
+				 elsif tmp_led = "01" then
+					  orange_count := orange_count + 1;
+				 end if;
+
+				 if red_count >= 2 then
+					  hike_demo_status <= "10"; -- NO
+				 elsif red_count = 1 or orange_count >= 2 then
+					  hike_demo_status <= "01"; -- MAYBE
+				 else
+					  hike_demo_status <= "00"; -- YES
+				 end if;
+		end process;
+		
+		loc_idx <= auto_idx when sw(5) = '1'
+          else 0 when sw(4) = '1'
+          else to_integer(unsigned(sw(2 downto 0))) mod 6;
+			 
+		
+
+		process(sw, loc_idx)
+		begin
+			 if sw(5) = '1' then
+				  header_txt <= (76,73,86,69,32,68,69,77,79,32,77,79,68,69,32,32,32,32,32,32,32,32,32,32);
+				  header_len <= 14;
+			 elsif sw(4) = '1' then
+				  header_txt <= (76,73,86,69,32,68,65,84,65,32,77,79,68,69,32,32,32,32,32,32,32,32,32,32);
+				  header_len <= 14;
+			 else
+				  header_txt <= LOCS(loc_idx);
+				  header_len <= LOC_LENS(loc_idx);
+			 end if;
+		end process;
+					 
+		-- SW5=Live Demo: animated drift  SW4=Live Sensor: real ports (0 until sensor_valid)
+		disp_lgt <= live_lgt                        when sw(5) = '1' else
+		            light_pct                        when (sw(4) = '1' and sensor_valid = '1') else
+		            0                                when sw(4) = '1' else
+		            LGT_VALS(loc_idx);
+		disp_hum <= live_hum                        when sw(5) = '1' else
+		            (humid_x10 / 10)                when (sw(4) = '1' and sensor_valid = '1') else
+		            0                               when sw(4) = '1' else
+		            HUM_VALS(loc_idx);
+		disp_bar <= live_bar                        when sw(5) = '1' else
+		            ((press_hpa - 300) * 100 / 900) when (sw(4) = '1' and sensor_valid = '1') else
+		            0                               when sw(4) = '1' else
+		            BAR_VALS(loc_idx);
+		disp_aqi <= live_aqi                        when sw(5) = '1' else
+		            (pm25_x10 / 20)                 when (sw(4) = '1' and sensor_valid = '1') else
+		            0                               when sw(4) = '1' else
+		            AQI_VALS(loc_idx);
+		disp_tmp <= live_tmp                        when sw(5) = '1' else
+		            temp_x10                        when (sw(4) = '1' and sensor_valid = '1') else
+		            0                               when sw(4) = '1' else
+		            TMP_VALS(loc_idx);
+		
+		process(clk25)
+			begin
+				 if rising_edge(clk25) then
+					  if slow_count = 12499999 then   -- about 0.5 sec at 25 MHz
+							slow_count <= 0;
+							-- Only advance auto_idx and drift values in live demo mode (sw5)
+							if sw(5) = '1' then
+							auto_idx <= (auto_idx + 1) mod 6;
+
+							-- live demo values drift slowly
+							if live_lgt < 85 then
+								 live_lgt <= live_lgt + 3;
+							else
+								 live_lgt <= 35;
+							end if;
+
+							if live_hum < 90 then
+								 live_hum <= live_hum + 4;
+							else
+								 live_hum <= 40;
+							end if;
+
+							if live_bar < 80 then
+								 live_bar <= live_bar + 5;
+							else
+								 live_bar <= 25;
+							end if;
+
+							if live_aqi < 75 then
+								 live_aqi <= live_aqi + 6;
+							else
+								 live_aqi <= 20;
+							end if;
+
+							if live_tmp < 330 then
+								 live_tmp <= live_tmp + 7;
+							else
+								 live_tmp <= 210;
+							end if;
+
+							end if; -- sw(5)='1'
+
+					  else
+							slow_count <= slow_count + 1;
+					  end if;
+				 end if;
+			end process;
     -- VGA counters
     process(clk25)
     begin
@@ -464,15 +627,15 @@ begin
     -- Bar values fixed at compile-time (randomised initial values)
 
     -- LED thresholds
-    lgt_led <= "00" when (LGT_VALS(loc_idx)>=40 and LGT_VALS(loc_idx)<=60) else
-               "01" when LGT_VALS(loc_idx)>60 else "10";
-    hum_led <= "00" when (HUM_VALS(loc_idx)>=40 and HUM_VALS(loc_idx)<=60) else
-               "10" when (HUM_VALS(loc_idx)<20 or HUM_VALS(loc_idx)>80) else "01";
-    bar_led <= "00" when BAR_VALS(loc_idx)>55 else "10" when BAR_VALS(loc_idx)<35 else "01";
-    aqi_led <= "00" when AQI_VALS(loc_idx)>60 else "10" when AQI_VALS(loc_idx)<30 else "01";
+    lgt_led <= "00" when (disp_lgt>=40 and disp_lgt<=60) else
+               "01" when disp_lgt>60 else "10";
+    hum_led <= "00" when (disp_hum>=40 and disp_hum<=60) else
+               "10" when (disp_hum<20 or disp_hum>80) else "01";
+    bar_led <= "00" when disp_bar>55 else "10" when disp_bar<35 else "01";
+    aqi_led <= "00" when disp_aqi>60 else "10" when disp_aqi<30 else "01";
     -- Temp LED: green=18-26C (180-260), orange=10-17.9 or 26.1-33C (100-179/261-330), red=else
-    tmp_led <= "00" when (TMP_VALS(loc_idx)>=180 and TMP_VALS(loc_idx)<=260) else
-               "01" when (TMP_VALS(loc_idx)>=100 and TMP_VALS(loc_idx)<=330) else "10";
+    tmp_led <= "00" when (disp_tmp>=180 and disp_tmp<=260) else
+               "01" when (disp_tmp>=100 and disp_tmp<=330) else "10";
 
     -- Icon ROM address
     -- Icon 128x128 at 2:1 scale centred at (530,130): top-left=(466,66)
@@ -494,9 +657,9 @@ begin
         variable bar : integer range 0 to 100;
         variable lgt : integer range 0 to 100;
     begin
-        hum := HUM_VALS(loc_idx);
-        bar := BAR_VALS(loc_idx);
-        lgt := LGT_VALS(loc_idx);
+        hum := disp_hum;
+        bar := disp_bar;
+        lgt := disp_lgt;
         if hum > 75 and bar < 40 then
             icon_sel <= 2;  -- RAIN
         elsif hum > 65 or (lgt < 30 and hour_count >= 7 and hour_count < 19) then
@@ -525,28 +688,28 @@ begin
     end process;
 
     -- Temp display digits from per-location constant
-    temp_disp_h <= TMP_VALS(loc_idx) / 100;
-    temp_disp_l <= (TMP_VALS(loc_idx) / 10) mod 10;
-    temp_disp_f <= TMP_VALS(loc_idx) mod 10;
+    temp_disp_h <= disp_tmp / 100;
+    temp_disp_l <= (disp_tmp / 10) mod 10;
+    temp_disp_f <= disp_tmp mod 10;
 
-    -- Location index
-    process(sw)
-    begin
-        if    sw(0)='1' then loc_idx<=0;
-        elsif sw(1)='1' then loc_idx<=1;
-        elsif sw(2)='1' then loc_idx<=2;
-        elsif sw(3)='1' then loc_idx<=3;
-        elsif sw(4)='1' then loc_idx<=4;
-        elsif sw(5)='1' then loc_idx<=5;
-        else                 loc_idx<=0; end if;
-    end process;
+--    -- Location index
+--    process(sw)
+--    begin
+--        if    sw(0)='1' then loc_idx<=0;
+--        elsif sw(1)='1' then loc_idx<=1;
+--        elsif sw(2)='1' then loc_idx<=2;
+--        elsif sw(3)='1' then loc_idx<=3;
+--        elsif sw(4)='1' then loc_idx<=4;
+--        elsif sw(5)='1' then loc_idx<=5;
+--        else                 loc_idx<=0; end if;
+--    end process;
 
     in_header <= '1' when v_count<HEADER_H else '0';
 
     -- -------------------------------------------------------
     -- Header font rendering
     -- -------------------------------------------------------
-    process(h_count, v_count, loc_idx, hour_count, min_count)
+    process(h_count, v_count, loc_idx, hour_count, min_count, header_len, header_txt)
         variable px          : integer range 0 to 639;
         variable py          : integer range 0 to 51;
         variable cidx        : integer range 0 to 23;
@@ -558,7 +721,8 @@ begin
         hdr_glyph_x <= 0;
         hdr_glyph_y <= 0;
         px := h_count; py := v_count;
-        loc_len     := LOC_LENS(loc_idx);
+        -- Use header_len so title position is stable in demo/sensor modes
+        loc_len     := header_len;
         loc_start_x := LOC_RIGHT - loc_len * CHAR_W;
 
         -- ROW0: time + date
@@ -599,7 +763,7 @@ begin
                 hdr_glyph_x <= (trel mod TITLE_GLYPH_W) * 8 / TITLE_GLYPH_W;
             elsif px>=loc_start_x and px<LOC_RIGHT then
                 cidx := (px-loc_start_x)/CHAR_W;
-                if cidx < loc_len then hdr_ascii<=LOCS(loc_idx)(cidx); end if;
+                if cidx < header_len then hdr_ascii <= header_txt(cidx); end if;
                 hdr_glyph_x <= (px-loc_start_x) mod CHAR_W;
             end if;
         end if;
@@ -616,19 +780,22 @@ begin
         h_count>=INFO_X1 and h_count<INFO_X2 and
         v_count>=INFO_Y1 and v_count<INFO_Y2 else '0';
 
-    process(h_count, v_count, loc_idx, in_info)
-        variable tx   : integer range 0 to 639;
-        variable ty   : integer range 0 to 479;
-        variable col  : integer range 0 to 33;
-        variable row  : integer range 0 to 7;
-        variable gx   : integer range 0 to 7;
-        variable gy   : integer range 0 to 15;
-        variable fidx : integer range 0 to 127;
-        variable frow : std_logic_vector(7 downto 0);
-        variable asc  : integer range 0 to 127;
+    process(h_count, v_count, loc_idx, in_info, sw)
+        variable tx      : integer range 0 to 639;
+        variable ty      : integer range 0 to 479;
+        variable col     : integer range 0 to 33;
+        variable row     : integer range 0 to 7;
+        variable gx      : integer range 0 to 7;
+        variable gy      : integer range 0 to 15;
+        variable fidx    : integer range 0 to 127;
+        variable frow    : std_logic_vector(7 downto 0);
+        variable asc     : integer range 0 to 127;
+        variable info_li : integer range 0 to 5;
     begin
         info_pixel <= '0';
         info_ascii <= 32;
+        -- In demo mode lock description to location 0 (no cycling text)
+        if sw(5) = '1' then info_li := 0; else info_li := loc_idx; end if;
         if in_info='1' then
             tx := h_count - (INFO_X1+INFO_PAD);
             ty := v_count - (INFO_Y1+INFO_PAD);
@@ -637,7 +804,17 @@ begin
                 row  := ty / CHAR_H;
                 gx   := tx mod CHAR_W;
                 gy   := ty mod CHAR_H;
-                asc  := DESC(loc_idx)(row)(col);
+					 if row <= 5 then
+							 asc := DESC(info_li)(row)(col);
+					 elsif row = 6 then
+							 asc := HIKE_LABEL(col);
+					 else
+							 case hike_demo_status is
+								  when "00"   => asc := HIKE_YES(col);
+								  when "01"   => asc := HIKE_MAYBE(col);
+								  when others => asc := HIKE_NO(col);
+							 end case;
+					 end if;
                 info_ascii <= asc;
                 fidx := asc - 32;
                 frow := FONT_ROM(fidx, gy);
@@ -761,10 +938,10 @@ begin
     process(which_bar, loc_idx)
     begin
         case which_bar is
-            when 0=>bar_fill_h<=LGT_VALS(loc_idx)*BAR_H/100;
-            when 1=>bar_fill_h<=HUM_VALS(loc_idx)*BAR_H/100;
-            when 2=>bar_fill_h<=BAR_VALS(loc_idx)*BAR_H/100;
-            when 3=>bar_fill_h<=AQI_VALS(loc_idx)*BAR_H/100;
+            when 0=>bar_fill_h<=disp_lgt*BAR_H/100;
+            when 1=>bar_fill_h<=disp_hum*BAR_H/100;
+            when 2=>bar_fill_h<=disp_bar*BAR_H/100;
+            when 3=>bar_fill_h<=disp_aqi*BAR_H/100;
             when others=>bar_fill_h<=0;
         end case;
     end process;
@@ -854,13 +1031,13 @@ begin
 
         elsif in_temp_box='1' then
             -- Green: 18-26C (180-260), Orange: 10-17.9 or 26.1-33C, Red: <10 or >33C
-            if (TMP_VALS(loc_idx) >= 180 and TMP_VALS(loc_idx) <= 260) then
+            if (disp_tmp >= 180 and disp_tmp <= 260) then
                 if temp_pixel='1' then
                     vga_r<=x"1A";vga_g<=x"3A";vga_b<=x"1A";  -- dark green text
                 else
                     vga_r<=x"7C";vga_g<=x"D4";vga_b<=x"6F";  -- fresh green box
                 end if;
-            elsif (TMP_VALS(loc_idx) >= 100 and TMP_VALS(loc_idx) <= 330) then
+            elsif (disp_tmp >= 100 and disp_tmp <= 330) then
                 if temp_pixel='1' then
                     vga_r<=x"3A";vga_g<=x"20";vga_b<=x"00";  -- dark text on orange
                 else
@@ -907,149 +1084,3 @@ begin
     end process;
 
 end architecture rtl;
-=======
-    function clamp(value, lo, hi : integer) return integer is
-    begin
-        if value < lo then
-            return lo;
-        elsif value > hi then
-            return hi;
-        else
-            return value;
-        end if;
-    end function;
-
-    signal x        : integer range 0 to 799;
-    signal y        : integer range 0 to 524;
-    signal visible  : std_logic;
-    signal r        : std_logic_vector(7 downto 0) := (others => '0');
-    signal g        : std_logic_vector(7 downto 0) := (others => '0');
-    signal b        : std_logic_vector(7 downto 0) := (others => '0');
-
-    signal temp_bar  : integer range 0 to 500;
-    signal humid_bar : integer range 0 to 500;
-    signal press_bar : integer range 0 to 500;
-    signal pm_bar    : integer range 0 to 500;
-    signal light_bar : integer range 0 to 500;
-begin
-    u_timing : entity work.vga_timing_640x480
-        port map (
-            clk     => clk,
-            pix_ce  => pix_ce,
-            reset_n => reset_n,
-            hcount  => x,
-            vcount  => y,
-            visible => visible,
-            hsync   => vga_hs,
-            vsync   => vga_vs,
-            blank_n => vga_blank_n,
-            sync_n  => vga_sync_n
-        );
-
-    temp_bar  <= clamp((temp_x10 * 500) / 400, 0, 500);
-    humid_bar <= clamp((humid_x10 * 500) / 1000, 0, 500);
-    press_bar <= clamp(((press_hpa - 900) * 500) / 200, 0, 500);
-    pm_bar    <= clamp(pm25_x10, 0, 500);
-    light_bar <= clamp(light_pct * 5, 0, 500);
-
-    process (x, y, visible, temp_bar, humid_bar, press_bar, pm_bar, light_bar,
-             temp_status, humid_status, press_status, pm_status,
-             sensor_valid, sensor_tick, remote_fresh)
-    begin
-        r <= (others => '0');
-        g <= (others => '0');
-        b <= (others => '0');
-
-        if visible = '1' then
-            r <= x"08";
-            g <= x"08";
-            b <= x"14";
-
-            if (y = 60) or (y = 150) or (y = 240) or (y = 330) or (y = 420) then
-                r <= x"40";
-                g <= x"40";
-                b <= x"40";
-            end if;
-
-            if (x >= 20 and x < 60) and (y >= 80 and y < 130) then
-                if temp_status = "00" then r <= x"00"; g <= x"D0"; b <= x"20";
-                elsif temp_status = "01" then r <= x"40"; g <= x"80"; b <= x"FF";
-                else r <= x"FF"; g <= x"20"; b <= x"20"; end if;
-            elsif (x >= 20 and x < 60) and (y >= 170 and y < 220) then
-                if humid_status = "00" then r <= x"00"; g <= x"D0"; b <= x"20";
-                elsif humid_status = "01" then r <= x"FF"; g <= x"D0"; b <= x"20";
-                else r <= x"20"; g <= x"80"; b <= x"FF"; end if;
-            elsif (x >= 20 and x < 60) and (y >= 260 and y < 310) then
-                if press_status = "00" then r <= x"00"; g <= x"D0"; b <= x"20";
-                elsif press_status = "01" then r <= x"20"; g <= x"80"; b <= x"FF";
-                else r <= x"FF"; g <= x"A0"; b <= x"20"; end if;
-            elsif (x >= 20 and x < 60) and (y >= 350 and y < 400) then
-                if pm_status = "00" then r <= x"00"; g <= x"D0"; b <= x"20";
-                elsif pm_status = "01" then r <= x"FF"; g <= x"D0"; b <= x"20";
-                else r <= x"FF"; g <= x"20"; b <= x"20"; end if;
-            end if;
-
-            if (x >= 100 and x < 600) and (y >= 90 and y < 120) then
-                r <= x"20"; g <= x"20"; b <= x"20";
-                if x < 100 + temp_bar then r <= x"FF"; g <= x"60"; b <= x"40"; end if;
-            elsif (x >= 100 and x < 600) and (y >= 180 and y < 210) then
-                r <= x"20"; g <= x"20"; b <= x"20";
-                if x < 100 + humid_bar then r <= x"40"; g <= x"A0"; b <= x"FF"; end if;
-            elsif (x >= 100 and x < 600) and (y >= 270 and y < 300) then
-                r <= x"20"; g <= x"20"; b <= x"20";
-                if x < 100 + press_bar then r <= x"60"; g <= x"FF"; b <= x"80"; end if;
-            elsif (x >= 100 and x < 600) and (y >= 360 and y < 390) then
-                r <= x"20"; g <= x"20"; b <= x"20";
-                if x < 100 + pm_bar then r <= x"FF"; g <= x"B0"; b <= x"20"; end if;
-            elsif (x >= 100 and x < 600) and (y >= 435 and y < 455) then
-                r <= x"20"; g <= x"20"; b <= x"20";
-                if x < 100 + light_bar then r <= x"FF"; g <= x"FF"; b <= x"60"; end if;
-            end if;
-
-            if (x >= 0 and x < 640) and (y >= 0 and y < 30) then
-                if remote_fresh = '1' then
-                    r <= x"70";
-                    g <= x"20";
-                    b <= x"D0";
-                elsif sensor_valid = '1' then
-                    r <= x"00";
-                    g <= x"B0";
-                    b <= x"20";
-                else
-                    r <= x"C0";
-                    g <= x"20";
-                    b <= x"20";
-                end if;
-            end if;
-
-            if (x >= 560 and x < 590) and (y >= 90 and y < 120) then
-                if remote_fresh = '1' then
-                    r <= x"60";
-                    g <= x"FF";
-                    b <= x"FF";
-                else
-                    r <= x"20";
-                    g <= x"20";
-                    b <= x"20";
-                end if;
-            end if;
-
-            if (x >= 600 and x < 630) and (y >= 90 and y < 120) then
-                if sensor_tick = '1' then
-                    r <= x"FF";
-                    g <= x"FF";
-                    b <= x"FF";
-                else
-                    r <= x"30";
-                    g <= x"30";
-                    b <= x"30";
-                end if;
-            end if;
-        end if;
-    end process;
-
-    vga_r <= r;
-    vga_g <= g;
-    vga_b <= b;
-end architecture;
->>>>>>> ee87c9df87af522d4b110eef90cac130d2313aeb
