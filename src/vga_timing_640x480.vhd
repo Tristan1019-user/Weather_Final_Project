@@ -50,3 +50,4 @@ begin
     blank_n <= '1' when (h < 640 and v < 480) else '0';
     sync_n <= '0';
 end architecture;
+

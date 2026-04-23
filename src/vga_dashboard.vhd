@@ -372,9 +372,9 @@ architecture rtl of vga_dashboard is
     -- -------------------------------------------------------
     -- Clock
     -- -------------------------------------------------------
-    signal sec_count  : integer range 0 to 59 := 2;   -- PATCHED_SEC
-    signal min_count  : integer range 0 to 59 := 55;   -- PATCHED_MIN
-    signal hour_count : integer range 0 to 23 := 15;  -- PATCHED_HOUR
+    signal sec_count  : integer range 0 to 59 := 10;   -- PATCHED_SEC
+    signal min_count  : integer range 0 to 59 := 11;   -- PATCHED_MIN
+    signal hour_count : integer range 0 to 23 := 14;  -- PATCHED_HOUR
 
     -- -------------------------------------------------------
     -- Bar demo values
@@ -628,7 +628,7 @@ begin
     -- Bar values fixed at compile-time (randomised initial values)
 
     -- LED thresholds
-    -- LGT: digital day/night â€” day(100)=green, night(0)=red, no orange
+    -- LGT: digital day/night ƒ?" day(100)=green, night(0)=red, no orange
     lgt_led <= "00" when disp_lgt >= 50 else "10";
     hum_led <= "00" when (disp_hum>=40 and disp_hum<=60) else
                "10" when (disp_hum<20 or disp_hum>80) else "01";
@@ -732,7 +732,7 @@ begin
                 case (px-DATE_X)/CHAR_W is
                     when 0=>hdr_ascii<=48+0; when 1=>hdr_ascii<=48+4;
                     when 2=>hdr_ascii<=46;
-                    when 3=>hdr_ascii<=48+1; when 4=>hdr_ascii<=48+9;
+                    when 3=>hdr_ascii<=48+2; when 4=>hdr_ascii<=48+1;
                     when 5=>hdr_ascii<=46;
                     when 6=>hdr_ascii<=48+2; when 7=>hdr_ascii<=48+0;
                     when 8=>hdr_ascii<=48+2; when 9=>hdr_ascii<=48+6;

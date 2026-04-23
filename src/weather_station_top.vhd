@@ -30,68 +30,42 @@ entity weather_station_top is
 end entity;
 
 architecture rtl of weather_station_top is
-    signal reset_n             : std_logic;
-    signal pix_ce              : std_logic := '0';
-    signal sec_tick            : std_logic := '0';
-    signal div2                : std_logic := '0';
-    signal sec_count           : unsigned(25 downto 0) := (others => '0');
+    signal reset_n          : std_logic;
+    signal div2             : std_logic := '0';
+    signal sec_count        : unsigned(25 downto 0) := (others => '0');
+    signal sec_tick         : std_logic := '0';
 
-    signal temp_x10            : integer range 0 to 999 := 0;
-    signal humid_x10           : integer range 0 to 1000 := 0;
-    signal press_hpa           : integer range 300 to 1200 := 300;
-    signal pm25_x10            : integer range 0 to 2000 := 0;
-    signal light_pct           : integer range 0 to 100 := 50;
-    signal sensor_valid        : std_logic := '0';
-    signal sensor_tick         : std_logic := '0';
-    signal bus_active          : std_logic := '0';
-    signal sht_valid           : std_logic := '0';
-    signal bmp_valid           : std_logic := '0';
-    signal sps_valid           : std_logic := '0';
-    signal sht_active          : std_logic := '0';
-    signal bmp_active          : std_logic := '0';
-    signal sps_active          : std_logic := '0';
+    signal temp_x10         : integer range 0 to 999 := 0;
+    signal humid_x10        : integer range 0 to 1000 := 0;
+    signal press_hpa        : integer range 300 to 1200 := 1013;
+    signal pm25_x10         : integer range 0 to 2000 := 0;
+    signal light_pct        : integer range 0 to 100 := 50;
+    signal sensor_valid     : std_logic := '0';
+    signal sensor_tick      : std_logic := '0';
+    signal bus_active       : std_logic := '0';
+    signal sht_valid        : std_logic := '0';
+    signal bmp_valid        : std_logic := '0';
+    signal sps_valid        : std_logic := '0';
+    signal sht_active       : std_logic := '0';
+    signal bmp_active       : std_logic := '0';
+    signal sps_active       : std_logic := '0';
+    signal host_link_active : std_logic := '0';
+    signal host_uart_rx     : std_logic := '1';
 
-    signal sht_sda_oen         : std_logic;
-    signal sht_scl_oen         : std_logic;
-    signal sht_sda_in          : std_logic;
-    signal sht_scl_in          : std_logic;
+    signal local_temp_status  : std_logic_vector(1 downto 0);
+    signal local_humid_status : std_logic_vector(1 downto 0);
+    signal local_press_status : std_logic_vector(1 downto 0);
+    signal local_pm_status    : std_logic_vector(1 downto 0);
+    signal hike_status        : std_logic_vector(1 downto 0) := "00";
 
-    signal bmp_sda_oen         : std_logic;
-    signal bmp_scl_oen         : std_logic;
-    signal bmp_sda_in          : std_logic;
-    signal bmp_scl_in          : std_logic;
-
-    signal sps_uart_tx         : std_logic;
-    signal sps_uart_rx         : std_logic;
-    signal host_uart_tx        : std_logic := '1';
-    signal host_uart_rx        : std_logic;
-    signal host_link_active    : std_logic := '0';
-    signal remote_fresh        : std_logic := '0';
-
-    signal ex_io_drive         : std_logic_vector(6 downto 0) := (others => 'Z');
-    signal gpio_drive          : std_logic_vector(35 downto 0) := (others => 'Z');
-
-    signal local_temp_status   : std_logic_vector(1 downto 0);
-    signal local_humid_status  : std_logic_vector(1 downto 0);
-    signal local_press_status  : std_logic_vector(1 downto 0);
-    signal local_pm_status     : std_logic_vector(1 downto 0);
-    signal remote_temp_status  : std_logic_vector(1 downto 0);
-    signal remote_humid_status : std_logic_vector(1 downto 0);
-    signal remote_press_status : std_logic_vector(1 downto 0);
-    signal remote_pm_status    : std_logic_vector(1 downto 0);
-    signal disp_temp_status    : std_logic_vector(1 downto 0);
-    signal disp_humid_status   : std_logic_vector(1 downto 0);
-    signal disp_press_status   : std_logic_vector(1 downto 0);
-    signal disp_pm_status      : std_logic_vector(1 downto 0);
-
-    signal temp_tens           : integer range 0 to 9;
-    signal temp_ones           : integer range 0 to 9;
-    signal humid_tens          : integer range 0 to 9;
-    signal humid_ones          : integer range 0 to 9;
-    signal press_thou          : integer range 0 to 9;
-    signal press_hund          : integer range 0 to 9;
-    signal press_tens          : integer range 0 to 9;
-    signal press_ones          : integer range 0 to 9;
+    signal temp_tens        : integer range 0 to 9;
+    signal temp_ones        : integer range 0 to 9;
+    signal humid_tens       : integer range 0 to 9;
+    signal humid_ones       : integer range 0 to 9;
+    signal press_thou       : integer range 0 to 9;
+    signal press_hund       : integer range 0 to 9;
+    signal press_tens       : integer range 0 to 9;
+    signal press_ones       : integer range 0 to 9;
 begin
     reset_n <= KEY(0);
 
@@ -99,12 +73,11 @@ begin
     begin
         if reset_n = '0' then
             div2      <= '0';
-            pix_ce    <= '0';
             sec_count <= (others => '0');
             sec_tick  <= '0';
         elsif rising_edge(CLOCK_50) then
-            pix_ce <= div2;
-            div2   <= not div2;
+            div2 <= not div2;
+
             if sec_count = to_unsigned(49999999, sec_count'length) then
                 sec_count <= (others => '0');
                 sec_tick  <= '1';
@@ -117,71 +90,34 @@ begin
 
     VGA_CLK <= div2;
 
-    process (sht_sda_oen, sht_scl_oen, bmp_sda_oen, bmp_scl_oen, sps_uart_tx, host_uart_tx)
-    begin
-        ex_io_drive <= (others => 'Z');
-        gpio_drive  <= (others => 'Z');
+    -- Keep unused legacy sensor pins high-impedance.
+    EX_IO <= (others => 'Z');
+    GPIO  <= (others => 'Z');
 
-        if sht_sda_oen = '0' then
-            ex_io_drive(0) <= '0'; -- JP4 pin 13 / PIN_J10
-        end if;
+    -- ESP32 UART -> DE2-115 GPIO(7) / PIN_AE16
+    host_uart_rx <= GPIO(7);
 
-        if sht_scl_oen = '0' then
-            ex_io_drive(1) <= '0'; -- JP4 pin 11 / PIN_J14
-        end if;
-
-        gpio_drive(2) <= sps_uart_tx;   -- PIN_AB21 -> SPS30 RX
-
-        if bmp_sda_oen = '0' then
-            gpio_drive(4) <= '0'; -- PIN_AC21 -> BMP280 SDA
-        end if;
-
-        if bmp_scl_oen = '0' then
-            gpio_drive(5) <= '0'; -- PIN_Y16 -> BMP280 SCL
-        end if;
-
-        gpio_drive(6) <= host_uart_tx; -- PIN_AD21 -> host adapter RXD
-    end process;
-
-    EX_IO <= ex_io_drive;
-    GPIO  <= gpio_drive;
-
-    sht_sda_in  <= EX_IO(0);
-    sht_scl_in  <= EX_IO(1);
-    bmp_sda_in  <= GPIO(4);
-    bmp_scl_in  <= GPIO(5);
-    sps_uart_rx <= GPIO(3);                                    -- PIN_Y17  <- SPS30 TX
-    host_uart_rx <= GPIO(7);                                   -- PIN_AE16 <- host adapter TXD (currently unused)
-
-    u_sensor_hub : entity work.sensor_hub
+    u_bridge : entity work.esp_uart_sensor_bridge
         port map (
-            clk           => CLOCK_50,
-            reset_n       => reset_n,
-            sec_tick      => sec_tick,
-            sht_sda_in    => sht_sda_in,
-            sht_scl_in    => sht_scl_in,
-            sht_sda_oen   => sht_sda_oen,
-            sht_scl_oen   => sht_scl_oen,
-            bmp_sda_in    => bmp_sda_in,
-            bmp_scl_in    => bmp_scl_in,
-            bmp_sda_oen   => bmp_sda_oen,
-            bmp_scl_oen   => bmp_scl_oen,
-            uart_rx       => sps_uart_rx,
-            uart_tx       => sps_uart_tx,
-            temp_x10      => temp_x10,
-            humid_x10     => humid_x10,
-            press_hpa     => press_hpa,
-            pm25_x10      => pm25_x10,
-            light_pct     => light_pct,
-            sht_valid_o   => sht_valid,
-            bmp_valid_o   => bmp_valid,
-            sps_valid_o   => sps_valid,
-            sht_active_o  => sht_active,
-            bmp_active_o  => bmp_active,
-            sps_active_o  => sps_active,
-            sensor_valid  => sensor_valid,
-            sensor_tick   => sensor_tick,
-            bus_active    => bus_active
+            clk          => CLOCK_50,
+            reset_n      => reset_n,
+            sec_tick     => sec_tick,
+            uart_rx      => host_uart_rx,
+            temp_x10     => temp_x10,
+            humid_x10    => humid_x10,
+            press_hpa    => press_hpa,
+            pm25_x10     => pm25_x10,
+            light_pct    => light_pct,
+            sht_valid_o  => sht_valid,
+            bmp_valid_o  => bmp_valid,
+            sps_valid_o  => sps_valid,
+            sht_active_o => sht_active,
+            bmp_active_o => bmp_active,
+            sps_active_o => sps_active,
+            sensor_valid => sensor_valid,
+            sensor_tick  => sensor_tick,
+            bus_active   => bus_active,
+            link_active  => host_link_active
         );
 
     u_status_local : entity work.status_logic
@@ -196,35 +132,64 @@ begin
             pm_status    => local_pm_status
         );
 
-    remote_temp_status  <= "00";
-    remote_humid_status <= "00";
-    remote_press_status <= "00";
-    remote_pm_status    <= "00";
-    remote_fresh        <= '0';
-    host_link_active    <= '0';
+    process(local_temp_status, local_humid_status, local_press_status, local_pm_status)
+        variable red_count    : integer range 0 to 4;
+        variable orange_count : integer range 0 to 4;
+    begin
+        red_count    := 0;
+        orange_count := 0;
 
-    disp_temp_status  <= local_temp_status;
-    disp_humid_status <= local_humid_status;
-    disp_press_status <= local_press_status;
-    disp_pm_status    <= local_pm_status;
+        if local_temp_status = "10" then
+            red_count := red_count + 1;
+        elsif local_temp_status = "01" then
+            orange_count := orange_count + 1;
+        end if;
+
+        if local_humid_status = "10" then
+            red_count := red_count + 1;
+        elsif local_humid_status = "01" then
+            orange_count := orange_count + 1;
+        end if;
+
+        if local_press_status = "10" then
+            red_count := red_count + 1;
+        elsif local_press_status = "01" then
+            orange_count := orange_count + 1;
+        end if;
+
+        if local_pm_status = "10" then
+            red_count := red_count + 1;
+        elsif local_pm_status = "01" then
+            orange_count := orange_count + 1;
+        end if;
+
+        if red_count >= 2 then
+            hike_status <= "10";      -- NO
+        elsif (red_count = 1) or (orange_count >= 2) then
+            hike_status <= "01";      -- MAYBE
+        else
+            hike_status <= "00";      -- YES
+        end if;
+    end process;
 
     u_vga : entity work.vga_dashboard
         port map (
-            clk          => CLOCK_50,
-            pix_ce       => pix_ce,
+            clk25        => div2,
             reset_n      => reset_n,
             temp_x10     => temp_x10,
             humid_x10    => humid_x10,
             press_hpa    => press_hpa,
             pm25_x10     => pm25_x10,
             light_pct    => light_pct,
-            temp_status  => disp_temp_status,
-            humid_status => disp_humid_status,
-            press_status => disp_press_status,
-            pm_status    => disp_pm_status,
+            temp_status  => local_temp_status,
+            humid_status => local_humid_status,
+            press_status => local_press_status,
+            pm_status    => local_pm_status,
+            hike_status  => hike_status,
+            demo_mode    => SW(5),
             sensor_valid => sensor_valid,
             sensor_tick  => sensor_tick,
-            remote_fresh => remote_fresh,
+            sw           => SW(5 downto 0),
             vga_r        => VGA_R,
             vga_g        => VGA_G,
             vga_b        => VGA_B,
@@ -252,7 +217,6 @@ begin
     u_hex6 : entity work.hex7seg port map (value => press_hund, seg => HEX6);
     u_hex7 : entity work.hex7seg port map (value => press_thou, seg => HEX7);
 
-    -- Keep the sensor-validation LEDs, but dedicate the top LEDs to the new host path.
     LEDG(0) <= sht_valid;
     LEDG(1) <= bmp_valid;
     LEDG(2) <= sps_valid;
@@ -261,5 +225,6 @@ begin
     LEDG(5) <= bmp_active;
     LEDG(6) <= sps_active;
     LEDG(7) <= host_link_active;
-    LEDG(8) <= remote_fresh;
+    LEDG(8) <= bus_active;
 end architecture;
+

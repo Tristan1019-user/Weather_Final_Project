@@ -4,9 +4,9 @@ use ieee.numeric_std.all;
 
 entity esp_uart_sensor_bridge is
     generic (
-        CLK_FREQ_HZ     : integer := 50000000;
-        BAUD_RATE       : integer := 115200;
-        LINK_TIMEOUT_SEC: integer := 5
+        CLK_FREQ_HZ      : integer := 50000000;
+        BAUD_RATE        : integer := 115200;
+        LINK_TIMEOUT_SEC : integer := 5
     );
     port (
         clk          : in  std_logic;
@@ -54,7 +54,8 @@ architecture rtl of esp_uart_sensor_bridge is
         ST_READ_TEMP,
         ST_READ_HUMID,
         ST_READ_PRESS,
-        ST_READ_PM25
+        ST_READ_PM25,
+        ST_READ_DAYNIGHT
     );
 
     function is_digit(value : std_logic_vector(7 downto 0)) return boolean is
@@ -124,15 +125,16 @@ begin
     link_active  <= link_active_r;
 
     process (clk, reset_n)
-        variable age_sec      : integer range 0 to LINK_TIMEOUT_SEC := 0;
-        variable field_acc    : integer range 0 to 32767 := 0;
-        variable cand_sht     : std_logic := '0';
-        variable cand_bmp     : std_logic := '0';
-        variable cand_sps     : std_logic := '0';
-        variable cand_temp    : integer := 0;
-        variable cand_humid   : integer := 0;
-        variable cand_press   : integer := 1013;
-        variable cand_pm25    : integer := 0;
+        variable age_sec       : integer range 0 to LINK_TIMEOUT_SEC := 0;
+        variable field_acc     : integer range 0 to 32767 := 0;
+        variable cand_sht      : std_logic := '0';
+        variable cand_bmp      : std_logic := '0';
+        variable cand_sps      : std_logic := '0';
+        variable cand_temp     : integer := 0;
+        variable cand_humid    : integer := 0;
+        variable cand_press    : integer := 1013;
+        variable cand_pm25     : integer := 0;
+        variable cand_daynight : std_logic := '0';
     begin
         if reset_n = '0' then
             parse_state   <= ST_WAIT_W;
@@ -155,6 +157,7 @@ begin
             cand_humid    := 0;
             cand_press    := 1013;
             cand_pm25     := 0;
+            cand_daynight := '0';
         elsif rising_edge(clk) then
             tick_r <= '0';
 
@@ -278,23 +281,38 @@ begin
                         when ST_READ_PM25 =>
                             if is_digit(rx_data) then
                                 field_acc := clamp(field_acc * 10 + digit_to_int(rx_data), 0, 32767);
-                            elsif rx_data = ASCII_NL then
+                            elsif rx_data = ASCII_COMMA then
                                 cand_pm25 := clamp(field_acc, 0, 2000);
-
-                                temp_r      <= clamp(cand_temp, 0, 999);
-                                humid_r     <= clamp(cand_humid, 0, 1000);
-                                press_r     <= clamp(cand_press, 300, 1200);
-                                pm25_r      <= clamp(cand_pm25, 0, 2000);
-                                light_r     <= 50;
-                                sht_valid_r <= cand_sht;
-                                bmp_valid_r <= cand_bmp;
-                                sps_valid_r <= cand_sps;
-                                link_active_r <= '1';
-                                age_sec := LINK_TIMEOUT_SEC;
-                                tick_r  <= '1';
-
-                                field_acc   := 0;
+                                field_acc := 0;
+                                parse_state <= ST_READ_DAYNIGHT;
+                            else
                                 parse_state <= ST_WAIT_W;
+                            end if;
+
+                        when ST_READ_DAYNIGHT =>
+                            if (rx_data = ASCII_0) or (rx_data = ASCII_1) then
+                                cand_daynight := rx_data(0);
+                            elsif rx_data = ASCII_NL then
+                                temp_r        <= clamp(cand_temp, 0, 999);
+                                humid_r       <= clamp(cand_humid, 0, 1000);
+                                press_r       <= clamp(cand_press, 300, 1200);
+                                pm25_r        <= clamp(cand_pm25, 0, 2000);
+
+                                if cand_daynight = '1' then
+                                    light_r <= 100;
+                                else
+                                    light_r <= 0;
+                                end if;
+
+                                sht_valid_r   <= cand_sht;
+                                bmp_valid_r   <= cand_bmp;
+                                sps_valid_r   <= cand_sps;
+                                link_active_r <= '1';
+                                age_sec       := LINK_TIMEOUT_SEC;
+                                tick_r        <= '1';
+
+                                field_acc     := 0;
+                                parse_state   <= ST_WAIT_W;
                             else
                                 parse_state <= ST_WAIT_W;
                             end if;
@@ -304,3 +322,4 @@ begin
         end if;
     end process;
 end architecture;
+
